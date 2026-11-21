@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "noLib": true,
+        "target": "es5",
+        "noUnusedLocals": true,
+        "baseUrl": "./",
+        "paths": {
+            "*" : ["./*", "./modules/*", "../dw-api-types/*"]
+        }
+    },
+    "typeAcquisition": {
+        "enable": false
+    },
+    "exclude": [
+        "*/cartridge/client/**.js"
+    ],
+    "include": [
+        "./**/types/*.d.ts",
+        "../dw-api-types/**/*.d.ts",
+        "./**/cartridge/controllers/**/*.js",
+        "./**/cartridge/models/**/*.js",
+        "./**/cartridge/scripts/**/*.js",
+        "./modules/**/*.js"
+    ]
+}

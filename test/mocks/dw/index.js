@@ -1,0 +1,20 @@
+module.exports.campaign = require('./campaign/index');
+module.exports.catalog = require('./catalog/index');
+module.exports.content = require('./content/index');
+module.exports.customer = require('./customer/index');
+module.exports.experience = require('./experience/index');
+module.exports.extensions = require('./extensions/index');
+module.exports.io = require('./io/index');
+module.exports.net = require('./net/index');
+module.exports.object = require('./object/index');
+module.exports.order = require('./order/index');
+module.exports.rpc = require('./rpc/index');
+module.exports.svc = require('./svc/index');
+module.exports.system = require('./system/index');
+module.exports.template = require('./template/index');
+module.exports.util = require('./util/index');
+module.exports.value = require('./value/index');
+module.exports.web = require('./web/index');
+module.exports.ws = require('./ws/index');
+
+module.exports.mocksMap = require('./mocksMap');

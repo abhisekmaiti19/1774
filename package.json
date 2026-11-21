@@ -1,0 +1,24 @@
+{
+    "name": "birkenstock-l360-employee-exercise",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Employee feature coding exercise",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "test": "mocha --no-config --require test/setup.cjs \"test/unit/**/*.js\""
+    },
+    "devDependencies": {
+        "chai": "4.3.7",
+        "mocha": "10.1.0",
+        "proxyquire": "2.1.3",
+        "sinon": "14.0.2"
+    },
+    "imports": {
+        "#mocks/*": "./test/mocks/*.js",
+        "#cartridges/*.json": "./cartridges/*.json",
+        "#cartridges/*": "./cartridges/*.js",
+        "#test/*": "./test/*.js"
+    }
+}

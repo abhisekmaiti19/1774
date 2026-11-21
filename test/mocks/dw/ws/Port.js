@@ -1,0 +1,3 @@
+module.exports = {
+    ENDPOINT_ADDRESS_PROPERTY: 'ENDPOINT_ADDRESS_PROPERTY'
+};

@@ -1,0 +1,9 @@
+module.exports.AddressBook = require('./AddressBook');
+module.exports.Customer = require('./Customer');
+module.exports.CustomerAddress = require('./CustomerAddress');
+module.exports.CustomerMgr = require('./CustomerMgr');
+module.exports.CustomerPaymentInstrument = require('./CustomerPaymentInstrument');
+module.exports.ProductList = require('./ProductList');
+module.exports.ProductListItem = require('./ProductListItem');
+module.exports.Profile = require('./Profile');
+module.exports.Wallet = require('./Wallet');
