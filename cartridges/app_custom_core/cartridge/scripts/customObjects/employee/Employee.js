@@ -62,7 +62,7 @@ Employee.prototype.initialize = function () {
         const Transaction = require('dw/system/Transaction');
 
         Transaction.wrap(function () {
-            this.apiEmployee.custom.customerNumber = null;
+                this.apiEmployee.custom.customerNumber = null;
         }.bind(this));
     }
 
@@ -75,11 +75,7 @@ const customObjectAttributes = [
     'zipCode',
     'countryCode',
     'companyID',
-    'discountGroup',
-    'customAnnualDiscountAllowance',
-    'unlimitedDiscount',
-    'annualDiscountUsage',
-    'lastAllowanceReset'
+    'companyBenifits'
 ];
 
 const readOnlyAttributes = [
@@ -90,6 +86,20 @@ const readOnlyAttributes = [
     'annualDiscountUsage',
     'lastAllowanceReset'
 ];
+const discountDetailAttributes = [
+    'discountGroup',
+    'customAnnualDiscountAllowance',
+    'annualDiscountUsage',
+    'unlimitedDiscount',
+];
+ 
+
+function getDiscountDetails(employee) {
+    return (
+        employee.apiEmployee.custom.companyBenifits &&
+        employee.apiEmployee.custom.companyBenifits.discountDetails
+    ) || {};
+}
 
 /**
  * @description Define getters for EmployeeCustomObject's properties based on its custom attributes,
@@ -99,6 +109,8 @@ const readOnlyAttributes = [
  *
  * @throws {Error} if an attempt is made to set a read-only property.
  */
+
+const Transaction = require('dw/system/Transaction');
 
 customObjectAttributes.forEach(function(field) {
     Object.defineProperty(Employee.prototype, field, {
@@ -112,14 +124,33 @@ customObjectAttributes.forEach(function(field) {
                 throw new Error('Cannot set read-only property ' + field + ' on Employee instance.');
             }
 
-            const Transaction = require('dw/system/Transaction');
-
             Transaction.wrap(function () {
                 this.apiEmployee.custom[field] = value;
             }.bind(this));
         }
     });
 });
+
+discountDetailAttributes.forEach(function (field) {
+    Object.defineProperty(Employee.prototype, field, {
+        get: function () {
+            return getDiscountDetails(this)[field];
+        },
+        enumerable: true,
+        configurable: false,
+        set: function (value) {
+            if (readOnlyAttributes.includes(field)) {
+                throw new Error('Cannot set read-only property ' + field + ' on Employee instance.');
+            }
+            Transaction.wrap(function () {
+                const details = getDiscountDetails(this);
+                details[field] = value;
+            }.bind(this));
+        }
+    });
+});
+
+
 
 /**
  * @description Get the employee's annual discount allowance: either from the custom attribute when a personal value is set,
@@ -138,30 +169,51 @@ Object.defineProperty(Employee.prototype, 'annualDiscountAllowance', {
     configurable: false
 });
 
+
+function getCategoryBenefit(employee, category) {
+    const benefits = employee.apiEmployee.custom.companyBenifits;
+    const byCategory = benefits && benefits.benifitDetailsByCategory;
+    return (byCategory && byCategory[category]) || null;
+}
+
+
+
 /**
  * @description Increase the annual discount usage by the specified amount.
  * @param {number} amount - amount to increase the annual discount usage by.
  * @returns {void}
  * @throws {Error} if the amount is not a non-negative number
  * @throws {Error} if the amount would exceed the annual discount allowance.
-*/
+ */
 
-Employee.prototype.increaseAnnualDiscountUsage = function (amount) {
-    if (typeof amount !== 'number' || amount < 0) {
+Employee.prototype.increaseAnnualDiscountUsage = function (amount, category) {
+    if (typeof amount !== 'number' || isNaN(amount) || amount < 0) {
         throw new Error('Cannot increase annual allowance usage: amount must be a non-negative number');
+    }
+
+    if (!empty(category)) {
+        const entry = getCategoryBenefit(this, category);
+        if (!entry || !entry.isActive) {
+            throw new Error('Category benefit "' + category + '" is inactive or missing');
+        }
+        const currentUsage = entry.discountUsage || 0;
+        if (currentUsage + amount > entry.annualDiscountAllowance) {
+            throw new Error('Cannot increase category allowance usage: allowance exceeded');
+        }
+        entry.discountUsage = currentUsage + amount;
+        return;
     }
 
     if (this.unlimitedDiscount) {
         return;
     }
 
-    const exceedsAllowance = this.annualDiscountUsage + amount > this.annualDiscountAllowance;
-
-    if (exceedsAllowance) {
+    const details = getDiscountDetails(this);
+    const currentUsage = details.annualDiscountUsage || 0;
+    if (currentUsage + amount > this.annualDiscountAllowance) {
         throw new Error('Cannot increase annual allowance usage: allowance exceeded');
     }
-
-    this.apiEmployee.custom.annualDiscountUsage += amount;
+    details.annualDiscountUsage = currentUsage + amount;
 };
 
 /**
@@ -175,20 +227,34 @@ Employee.prototype.increaseAnnualDiscountUsage = function (amount) {
  * @throws {Error} if the amount would result in a negative annual discount usage.
  */
 
-Employee.prototype.decreaseAnnualDiscountUsage = function (amount) {
-    if (typeof amount !== 'number' || amount < 0) {
+Employee.prototype.decreaseAnnualDiscountUsage = function (amount, category) {
+    if (typeof amount !== 'number' || isNaN(amount) || amount < 0) {
         throw new Error('Cannot decrease annual allowance usage: amount must be a non-negative number');
+    }
+
+    if (!empty(category)) {
+        const entry = getCategoryBenefit(this, category);
+        if (!entry) {
+            throw new Error('Category benefit "' + category + '" not found');
+        }
+        const currentUsage = entry.discountUsage || 0;
+        if (currentUsage - amount < 0) {
+            throw new Error('Cannot decrease category allowance usage: allowance below zero');
+        }
+        entry.discountUsage = currentUsage - amount;
+        return;
     }
 
     if (this.unlimitedDiscount) {
         return;
     }
 
-    if (this.annualDiscountUsage - amount < 0) {
-        throw new Error('Cannot decrease annual discount usage: allowance below zero');
+    const details = getDiscountDetails(this);
+    const currentUsage = details.annualDiscountUsage || 0;
+    if (currentUsage - amount < 0) {
+        throw new Error('Cannot decrease annual allowance usage: allowance below zero');
     }
-
-    this.apiEmployee.custom.annualDiscountUsage -= amount;
+    details.annualDiscountUsage = currentUsage - amount;
 };
 
 /**
@@ -307,9 +373,9 @@ Employee.prototype.setCustomer = function (profile) {
     const Transaction = require('dw/system/Transaction');
 
     Transaction.wrap(function () {
-        profile.custom.employeeNumber = this.ID;
-        this.apiEmployee.custom.customerNumber = customerNumber;
-        this.customer = profile.customer;
+            profile.custom.employeeNumber = this.ID;
+            this.apiEmployee.custom.customerNumber = customerNumber;
+            this.customer = profile.customer;
     }.bind(this));
 };
 
@@ -326,10 +392,10 @@ Employee.prototype.resetCustomer = function () {
     const accountHelpers = require('*/cartridge/scripts/helpers/accountHelpers');
 
     Transaction.wrap(function () {
-        accountHelpers.clearEmployeeLegacyAttributes(this.customer.profile);
-        this.apiEmployee.custom.customerNumber = null;
-        this.customer.profile.custom.employeeNumber = null;
-        this.customer = null;
+            accountHelpers.clearEmployeeLegacyAttributes(this.customer.profile);
+            this.apiEmployee.custom.customerNumber = null;
+            this.customer.profile.custom.employeeNumber = null;
+            this.customer = null;
     }.bind(this));
 };
 

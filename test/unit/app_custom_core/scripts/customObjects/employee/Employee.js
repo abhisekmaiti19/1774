@@ -13,6 +13,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
     let mockCustomerMgr;
     let mockEmployeeMgr;
     let mockAccountHelpers;
+    let customPreference;
 
     const createMockCustomer = (overrides = {}) => {
         return {
@@ -36,11 +37,22 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                 zipCode: '12345',
                 countryCode: 'US',
                 companyID: 'BIRK',
-                discountGroup: 'EMPLOYEE',
-                customAnnualDiscountAllowance: 1000,
-                annualDiscountUsage: 250,
-                unlimitedDiscount: false,
-                active: true
+                companyBenifits: {
+                discountDetails: {
+                      discountGroup: "EMPLOYEE",
+                      customAnnualDiscountAllowance: 1000,
+                      annualDiscountUsage: 250,
+                      unlimitedDiscount: false,
+                      lastAllowanceReset: "2026-01-01T00:00:00.000Z",
+                    },
+                    benifitDetailsByCategory: {
+                        1774 : {
+                            isActive: true,
+                            annualDiscountAllowance: 1000,
+                            discountUsage: 0
+                        } 
+                    },
+                }
             }
         };
 
@@ -56,6 +68,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             custom: mergedCustom
         };
     };
+
 
     beforeEach(() => {
         const mockCustomer = createMockCustomer();
@@ -164,12 +177,16 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const mockApiEmployee = createMockApiEmployee({
                 custom: {
                     customerNumber: undefined,
-                    annualDiscountUsage: 0,
-                    customAnnualDiscountAllowance: null,
-                    unlimitedDiscount: false
+                    companyBenifits: {
+                        discountDetails:{
+                            annualDiscountUsage: 0,
+                            customAnnualDiscountAllowance: null,
+                            unlimitedDiscount: false
+                        }
+                    }
                 }
             });
-            const employee = new Employee(mockApiEmployee);
+            const employee = new Employee(mockApiEmployee);  
 
             assert.equal(employee.annualDiscountUsage, 0);
             assert.isUndefined(employee.annualDiscountAllowance);
@@ -178,6 +195,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             assert.isUndefined(employee.customerNumber);
         });
     });
+
 
     describe('Property Setters', () => {
         it('should throw error when setting a read-only attribute', () => {
@@ -195,7 +213,26 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
 
             employee.discountGroup = 'PREMIUM';
 
-            assert.equal(mockApiEmployee.custom.discountGroup, 'PREMIUM');
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.discountGroup, 'PREMIUM');
+        });
+
+        // Beacuse I changed the Custom Object Structure I've added few more test cases 
+        it('should update unlimitedDiscount attribute', () => {
+            const mockApiEmployee = createMockApiEmployee();
+            const employee = new Employee(mockApiEmployee);
+
+            employee.unlimitedDiscount = false;
+
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.unlimitedDiscount, false);
+        });
+
+        it('should not update annualDiscountUsage[readOnly] attribute', () => {
+            const mockApiEmployee = createMockApiEmployee();
+            const employee = new Employee(mockApiEmployee);
+            // console.log(mockApiEmployee.custom.companyBenifits.discountDetails)
+            assert.throws(() => {
+                employee.annualDiscountUsage = 500;
+            }, 'Cannot set read-only property annualDiscountUsage on Employee instance')
         });
     });
 
@@ -204,7 +241,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const mockApiEmployee = createMockApiEmployee({
                 custom: {
                     customerNumber: 'CUST123',
-                    annualDiscountUsage: 250,
+                    annualDiscountUsage: 250, 
                     customAnnualDiscountAllowance: 1000
                 }
             });
