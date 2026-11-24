@@ -1,6 +1,6 @@
 # 1774 Employee Discount
 
-**Technical Design:** [Notion LLD](ADD_NOTION_LINK_HERE)
+**Technical Design:** [Notion LLD](https://app.notion.com/p/Birkenstock-1774-41f74b592bbb8093a484ec2c4cdcca7d?source=copy_link)
 
 ## File Changes
 
