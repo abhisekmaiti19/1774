@@ -252,7 +252,7 @@ Employee.prototype.decreaseAnnualDiscountUsage = function (amount, category) {
     const details = getDiscountDetails(this);
     const currentUsage = details.annualDiscountUsage || 0;
     if (currentUsage - amount < 0) {
-        throw new Error('Cannot decrease annual allowance usage: allowance below zero');
+        throw new Error('Cannot decrease annual discount usage: allowance below zero');
     }
     details.annualDiscountUsage = currentUsage - amount;
 };
@@ -265,7 +265,7 @@ Employee.prototype.decreaseAnnualDiscountUsage = function (amount, category) {
 
 Employee.prototype.resetAnnualDiscountUsage = function () {
     this.decreaseAnnualDiscountUsage(this.annualDiscountUsage || 0);
-    this.apiEmployee.custom.lastAllowanceReset = new Date();
+    this.lastAllowanceReset = new Date();
 }
 
 /**
@@ -283,7 +283,7 @@ Employee.prototype.updateCustomAnnualDiscountAllowance = function (newAllowance)
         throw new Error('New allowance must be a non-negative number');
     }
 
-    this.apiEmployee.custom.customAnnualDiscountAllowance = newAllowance;
+    this.customAnnualDiscountAllowance = newAllowance;
 };
 
 /**

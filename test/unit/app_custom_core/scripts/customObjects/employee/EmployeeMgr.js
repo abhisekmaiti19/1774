@@ -10,6 +10,7 @@ const mockCustomObjectMgr = require('#mocks/dw/object/CustomObjectMgr');
 const mockTransaction = require('#mocks/dw/system/Transaction');
 const mockEmployee = require('#mocks/app_custom_core/scripts/customObjects/employee/Employee');
 const ES6Iterator = require('#mocks/app_custom_core/scripts/customObjects/ES6Iterator');
+const CustomPreference = require('#mocks/cartridge/scripts/helpers/customPreference');
 
 describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
     let EmployeeMgr;

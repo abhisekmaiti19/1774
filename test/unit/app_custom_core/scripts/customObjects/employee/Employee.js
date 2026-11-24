@@ -13,7 +13,6 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
     let mockCustomerMgr;
     let mockEmployeeMgr;
     let mockAccountHelpers;
-    let customPreference;
 
     const createMockCustomer = (overrides = {}) => {
         return {
@@ -38,7 +37,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                 countryCode: 'US',
                 companyID: 'BIRK',
                 companyBenifits: {
-                discountDetails: {
+                    discountDetails: {
                       discountGroup: "EMPLOYEE",
                       customAnnualDiscountAllowance: 1000,
                       annualDiscountUsage: 250,
@@ -55,6 +54,19 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                 }
             }
         };
+
+        const companyBenifits = defaultEmployee.custom.companyBenifits;
+
+        Object.keys(companyBenifits.discountDetails).forEach((attributes)=>{
+            if( overrides.custom && Object.keys(overrides.custom).includes(attributes) ){
+                companyBenifits.discountDetails[attributes] = overrides.custom[attributes];
+                delete overrides.custom[attributes];
+            }
+        })
+
+       if(overrides.custom){
+        overrides.custom.companyBenifits = companyBenifits;
+       }
 
         const mergedCustom = overrides.custom
             ? { ...defaultEmployee.custom, ...overrides.custom }
@@ -177,16 +189,12 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const mockApiEmployee = createMockApiEmployee({
                 custom: {
                     customerNumber: undefined,
-                    companyBenifits: {
-                        discountDetails:{
-                            annualDiscountUsage: 0,
-                            customAnnualDiscountAllowance: null,
-                            unlimitedDiscount: false
-                        }
-                    }
+                    annualDiscountUsage: 0,
+                    customAnnualDiscountAllowance: null,
+                    unlimitedDiscount: false
                 }
             });
-            const employee = new Employee(mockApiEmployee);  
+            const employee = new Employee(mockApiEmployee);
 
             assert.equal(employee.annualDiscountUsage, 0);
             assert.isUndefined(employee.annualDiscountAllowance);
@@ -229,7 +237,6 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
         it('should not update annualDiscountUsage[readOnly] attribute', () => {
             const mockApiEmployee = createMockApiEmployee();
             const employee = new Employee(mockApiEmployee);
-            // console.log(mockApiEmployee.custom.companyBenifits.discountDetails)
             assert.throws(() => {
                 employee.annualDiscountUsage = 500;
             }, 'Cannot set read-only property annualDiscountUsage on Employee instance')
@@ -267,7 +274,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const employee = new Employee(mockApiEmployee);
 
             assert.doesNotThrow(() => {
-                employee.increaseAnnualDiscountUsage(100);
+                employee.increaseAnnualDiscountUsage(100); 
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
@@ -308,13 +315,11 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             mockCustomerMgr.getCustomerByCustomerNumber.returns(mockCustomer);
 
             const employee = new Employee(mockApiEmployee);
-
             assert.doesNotThrow(() => {
                 employee.increaseAnnualDiscountUsage(100);
             });
-
             assert.equal(employee.annualDiscountUsage, 350);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 350);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 350);
         });
     });
 
@@ -362,9 +367,11 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                     customAnnualDiscountAllowance: 1000
                 }
             });
+            
             const employee = new Employee(mockApiEmployee);
 
-            assert.throws(() => {
+
+            assert.throws(() => { 
                 employee.decreaseAnnualDiscountUsage(300);
             }, 'Cannot decrease annual discount usage: allowance below zero');
         });
@@ -394,7 +401,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountUsage, 150);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 150);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 150);
         });
     });
 
@@ -426,7 +433,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 0);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 0);
             assert.isDefined(employee.lastAllowanceReset);
         });
         it('should decrease annual discount usage by defined current usage', () => {
@@ -456,7 +463,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 0);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 0);
             assert.isDefined(employee.lastAllowanceReset);
         });
     });
@@ -506,7 +513,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountAllowance, 1500);
-            assert.equal(mockApiEmployee.custom.customAnnualDiscountAllowance, 1500);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.customAnnualDiscountAllowance, 1500);
         });
 
         it('should update annual discount allowance for unregistered employee', () => {
@@ -524,7 +531,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountAllowance, 2000);
-            assert.equal(mockApiEmployee.custom.customAnnualDiscountAllowance, 2000);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.customAnnualDiscountAllowance, 2000);
         });
     });
 

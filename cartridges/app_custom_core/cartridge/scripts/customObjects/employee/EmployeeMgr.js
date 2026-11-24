@@ -4,7 +4,7 @@ const Employee = require('*/cartridge/scripts/customObjects/employee/Employee');
 const Logger = require('dw/system/Logger');
 const CustomObjectMgr = require('dw/object/CustomObjectMgr');
 const ES6Iterator = require('*/cartridge/scripts/customObjects/ES6Iterator');
-const CustomPreference = require('cartridge/scripts/helpers/customPreference');
+const CustomPreference = require('*/cartridge/scripts/helpers/customPreference');
 
 /**
  *  @module EmployeeMgr
