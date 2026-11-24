@@ -218,15 +218,15 @@ Employee.prototype.increaseAnnualDiscountUsage = function (amount, category) {
     }
 
     if (!empty(category)) {
-        const entry = getCategoryBenefit(this, category);
-        if (!entry || !entry.isActive) {
+        const categoryBenefit = getCategoryBenefit(this, category);
+        if (!categoryBenefit || !categoryBenefit.isActive) {
             throw new Error('Category benefit "' + category + '" is inactive or missing');
         }
-        const currentUsage = entry.discountUsage || 0;
-        if (currentUsage + amount > entry.annualDiscountAllowance) {
+        const currentUsage = categoryBenefit.discountUsage || 0;
+        if (currentUsage + amount > categoryBenefit.annualDiscountAllowance) {
             throw new Error('Cannot increase category allowance usage: allowance exceeded');
         }
-        entry.discountUsage = currentUsage + amount;
+        categoryBenefit.discountUsage = currentUsage + amount;
         return;
     }
 
@@ -260,15 +260,15 @@ Employee.prototype.decreaseAnnualDiscountUsage = function (amount, category) {
     }
 
     if (!empty(category)) {
-        const entry = getCategoryBenefit(this, category);
-        if (!entry) {
+        const categoryBenefit = getCategoryBenefit(this, category);
+        if (!categoryBenefit) {
             throw new Error('Category benefit "' + category + '" not found');
         }
-        const currentUsage = entry.discountUsage || 0;
+        const currentUsage = categoryBenefit.discountUsage || 0;
         if (currentUsage - amount < 0) {
             throw new Error('Cannot decrease category allowance usage: allowance below zero');
         }
-        entry.discountUsage = currentUsage - amount;
+        categoryBenefit.discountUsage = currentUsage - amount;
         return;
     }
 
