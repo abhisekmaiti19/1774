@@ -208,22 +208,25 @@ employeeHelpers.validateReferentialIntegrity = function (employeeCO, profiles) {
  */
 
 employeeHelpers.validateEmployeeCustomObjectAllowance = function (employeeCO) {
-    if (employeeCO.custom.unlimitedDiscount || !employeeCO.custom.annualDiscountUsage) {
+    const benefits = employeeCO.custom.companyBenifits;
+    const details = (benefits && benefits.discountDetails) || {};
+
+    if (details.unlimitedDiscount || !details.annualDiscountUsage) {
         return [];
     }
 
-    if (employeeCO.custom.annualDiscountUsage < 0) {
-        return ['INVALID_ALLOWANCE: Employee [' + employeeCO.custom.ID + '] has negative annualDiscountUsage [' + employeeCO.custom.annualDiscountUsage + ']'];
-    } 
-    
+    if (details.annualDiscountUsage < 0) {
+        return ['INVALID_ALLOWANCE: Employee [' + employeeCO.custom.ID + '] has negative annualDiscountUsage [' + details.annualDiscountUsage + ']'];
+    }
+
     const EmployeeMgr = require('*/cartridge/scripts/customObjects/employee/EmployeeMgr');
     const annualDiscountAllowance = EmployeeMgr.getAnnualDiscountAllowance(
         employeeCO.custom.countryCode,
-        employeeCO.custom.discountGroup
+        details.discountGroup
     );
 
-    if (employeeCO.custom.annualDiscountUsage > annualDiscountAllowance) {
-        return ['INVALID_ALLOWANCE: Employee [' + employeeCO.custom.ID + '] has annualDiscountUsage [' + employeeCO.custom.annualDiscountUsage + '] exceeding allowance [' + annualDiscountAllowance + ']'];
+    if (details.annualDiscountUsage > annualDiscountAllowance) {
+        return ['INVALID_ALLOWANCE: Employee [' + employeeCO.custom.ID + '] has annualDiscountUsage [' + details.annualDiscountUsage + '] exceeding allowance [' + annualDiscountAllowance + ']'];
     }
 
     return [];

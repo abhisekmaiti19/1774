@@ -418,20 +418,26 @@ describe("app_custom_core/cartridge/scripts/helpers/employeeHelpers", () => {
   });
 
   describe(".validateEmployeeCustomObject()", () => {
-    const createMockEmployeeCO = (id, attrs) => ({
-      custom: Object.assign(
-        {
-          ID: id,
-          customerNumber: "",
-          unlimitedDiscount: false,
-          annualDiscountUsage: 0,
-          countryCode: "DE",
-          discountGroup: "A",
-          zipCode: "12345",
-        },
+    const DISCOUNT_DETAIL_KEYS = ["discountGroup", "unlimitedDiscount", "annualDiscountUsage"];
+
+    const createMockEmployeeCO = (id, attrs) => {
+      const custom = Object.assign(
+        { ID: id, customerNumber: "", countryCode: "DE", zipCode: "12345" },
         attrs,
-      ),
-    });
+      );
+      const discountDetails = { unlimitedDiscount: false, annualDiscountUsage: 0, discountGroup: "A" };
+
+      DISCOUNT_DETAIL_KEYS.forEach((key) => {
+        if (key in custom) {
+          discountDetails[key] = custom[key];
+          delete custom[key];
+        }
+      });
+
+      custom.companyBenifits = { discountDetails: discountDetails, benifitDetailsByCategory: {} };
+
+      return { custom: custom };
+    };
 
     beforeEach(() => {
       EmployeeMgrMock = {

@@ -48,7 +48,7 @@ const EmployeeMgr = (function () {
      * @throws {Error} if the employee already exists or if the ID is invalid
      * @throws {Error} if invalid arguments are provided
      * @throws {Error} if the CustomObject creation fails
-     */ 
+     */
     const createEmployee = function ({
         ID,
         countryCode,
@@ -80,12 +80,14 @@ const EmployeeMgr = (function () {
 
         let newCO;
 
+        // we could use site specific site Custom prefernce value, but I write below logic considering current structure 
+        // e.g. { "1774": { "US": 1000 } }
         const categoryConfig = CustomPreference.employeeBenifitsConfigs;
         const benifitDetailsByCategory = {};
         if (CustomPreference.isEmployeeBenifitsActive && categoryConfig) {
             Object.keys(categoryConfig).forEach(function (category) {
-                // we could use site specific site Custom prefernce value, but I write below logic considering current structure 
-                const allowance = parseFloat(categoryConfig[category][countryCode]);
+                const allowanceByCountry = categoryConfig[category] || {};
+                const allowance = parseFloat(allowanceByCountry[countryCode]);
                 if (!isNaN(allowance) && allowance >= 0) {
                     benifitDetailsByCategory[category] = {
                         isActive: true,

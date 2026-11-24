@@ -1,4 +1,5 @@
 const Site = require('dw/system/Site');
+const { safeParseJSON } = require('*/cartridge/scripts/utils');
 const currentSite = Site.getCurrent().getPreferences().getCustom();
 
 module.exports = {
