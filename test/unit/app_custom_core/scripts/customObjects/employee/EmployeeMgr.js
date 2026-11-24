@@ -16,22 +16,20 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
     let mockCustomObject;
     let sitepref;
     let mockAccountHelpers;
+    let mockCustomPreference;
 
     beforeEach(() => {
         mockCustomObject = {
-            custom: {
-                ID: '',
-                countryCode: '',
-                customAnnualDiscountAllowance: 0,
-                companyID: '',
-                zipCode: '',
-                discountGroup: '',
-                unlimitedDiscount: false
-            }
+            custom: {}
         };
 
         sitepref = {
             getJSONValue: sinon.stub()
+        };
+
+        mockCustomPreference = {
+            isEmployeeBenifitsActive: false,
+            employeeBenifitsConfigs: {}
         };
 
         sinon.stub(mockCustomObjectMgr, 'createCustomObject').returns(mockCustomObject);
@@ -58,6 +56,7 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
             'util/sitepref': sitepref,
             '*/cartridge/scripts/customObjects/ES6Iterator': ES6Iterator,
             '*/cartridge/scripts/helpers/accountHelpers': mockAccountHelpers,
+            '*/cartridge/scripts/helpers/customPreference': mockCustomPreference,
             'dw/customer/CustomerMgr': {
                 getProfile: sinon.stub().returns({
                     custom: {
@@ -193,17 +192,24 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
 
             const result = EmployeeMgr.createEmployee(params);
 
-            assert.isDefined(result.apiEmployee.custom.lastAllowanceReset);
+            const details = result.apiEmployee.custom.companyBenifits.discountDetails;
+
+            assert.isDefined(details.lastAllowanceReset);
             assert.deepEqual(result.apiEmployee.custom, {
                 ID: 'ACME-TEST123',
                 countryCode: 'US',
-                annualDiscountUsage: 0,
-                customAnnualDiscountAllowance: 1000,
                 companyID: 'ACME',
                 zipCode: '12345',
-                discountGroup: 'STANDARD',
-                unlimitedDiscount: false,
-                lastAllowanceReset: result.apiEmployee.custom.lastAllowanceReset // skip actual date check
+                companyBenifits: {
+                    discountDetails: {
+                        discountGroup: 'STANDARD',
+                        customAnnualDiscountAllowance: 1000,
+                        annualDiscountUsage: 0,
+                        unlimitedDiscount: false,
+                        lastAllowanceReset: details.lastAllowanceReset // skip actual date check
+                    },
+                    benifitDetailsByCategory: {}
+                }
             });
         });
 
@@ -219,17 +225,24 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
 
             const result = EmployeeMgr.createEmployee(params);
 
-            assert.isDefined(result.apiEmployee.custom.lastAllowanceReset);
+            const details = result.apiEmployee.custom.companyBenifits.discountDetails;
+
+            assert.isDefined(details.lastAllowanceReset);
             assert.deepEqual(result.apiEmployee.custom, {
                 ID: 'TEST123',
                 countryCode: 'US',
-                annualDiscountUsage: 0,
-                customAnnualDiscountAllowance: 1000,
                 companyID: '',
                 zipCode: '12345',
-                discountGroup: 'STANDARD',
-                unlimitedDiscount: false,
-                lastAllowanceReset: result.apiEmployee.custom.lastAllowanceReset // skip actual date check
+                companyBenifits: {
+                    discountDetails: {
+                        discountGroup: 'STANDARD',
+                        customAnnualDiscountAllowance: 1000,
+                        annualDiscountUsage: 0,
+                        unlimitedDiscount: false,
+                        lastAllowanceReset: details.lastAllowanceReset // skip actual date check
+                    },
+                    benifitDetailsByCategory: {}
+                }
             });
         });
 
@@ -244,17 +257,24 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
 
             const result = EmployeeMgr.createEmployee(params);
 
-            assert.isDefined(result.apiEmployee.custom.lastAllowanceReset);
+            const details = result.apiEmployee.custom.companyBenifits.discountDetails;
+
+            assert.isDefined(details.lastAllowanceReset);
             assert.deepEqual(result.apiEmployee.custom, {
                 ID: 'TEST123',
                 countryCode: 'US',
-                discountGroup: 'STANDARD',
                 companyID: '',
-                annualDiscountUsage: 0,
-                customAnnualDiscountAllowance: 0,
-                unlimitedDiscount: true,
                 zipCode: '12345',
-                lastAllowanceReset: result.apiEmployee.custom.lastAllowanceReset // skip actual date check
+                companyBenifits: {
+                    discountDetails: {
+                        discountGroup: 'STANDARD',
+                        customAnnualDiscountAllowance: 0,
+                        annualDiscountUsage: 0,
+                        unlimitedDiscount: true,
+                        lastAllowanceReset: details.lastAllowanceReset // skip actual date check
+                    },
+                    benifitDetailsByCategory: {}
+                }
             });
         });
 
@@ -272,6 +292,109 @@ describe('app_custom_core/scripts/customObjects/employee/EmployeeMgr', () => {
             assert.throws(() => {
                 EmployeeMgr.createEmployee(params);
             }, 'Failed to create employee CustomObject: Database connection failed');
+        });
+    });
+
+    describe('.createEmployee() category benefits', () => {
+        const baseParams = {
+            ID: 'TEST123',
+            countryCode: 'US',
+            customAnnualDiscountAllowance: 1000,
+            zipCode: '12345',
+            discountGroup: 'STANDARD'
+        };
+
+        const createWith = (overrides = {}) => {
+            const result = EmployeeMgr.createEmployee({ ...baseParams, ...overrides });
+
+            return result.apiEmployee.custom.companyBenifits.benifitDetailsByCategory;
+        };
+
+        beforeEach(() => {
+            mockCustomPreference.isEmployeeBenifitsActive = true;
+            mockCustomPreference.employeeBenifitsConfigs = { 1774: { US: 1000 } };
+        });
+
+        it('should create the 1774 benefit with the configured allowance of the country', () => {
+            assert.deepEqual(createWith(), {
+                1774: { isActive: true, annualDiscountAllowance: 1000, discountUsage: 0 }
+            });
+        });
+
+        it('should create no category benefit when the feature is switched off', () => {
+            mockCustomPreference.isEmployeeBenifitsActive = false;
+
+            assert.deepEqual(createWith(), {});
+        });
+
+        it('should create no category benefit when there is no configuration', () => {
+            mockCustomPreference.employeeBenifitsConfigs = {};
+            assert.deepEqual(createWith(), {});
+
+            mockCustomPreference.employeeBenifitsConfigs = null;
+            assert.deepEqual(createWith(), {});
+        });
+
+        it('should create no benefit for a country that has no entry in the configuration', () => {
+            assert.deepEqual(createWith({ countryCode: 'DE' }), {});
+        });
+
+        it('should be reusable for another region through configuration only', () => {
+            mockCustomPreference.employeeBenifitsConfigs = { 1774: { US: 1000, DE: 500 } };
+
+            assert.equal(createWith({ countryCode: 'DE' })[1774].annualDiscountAllowance, 500);
+            assert.equal(createWith({ countryCode: 'US' })[1774].annualDiscountAllowance, 1000);
+        });
+
+        it('should create a benefit for every configured category (extensible)', () => {
+            mockCustomPreference.employeeBenifitsConfigs = { 1774: { US: 1000 }, OUTLET: { US: 250 } };
+
+            const byCategory = createWith();
+
+            assert.deepEqual(Object.keys(byCategory).sort(), ['1774', 'OUTLET']);
+            assert.equal(byCategory.OUTLET.annualDiscountAllowance, 250);
+        });
+
+        it('should only create benefits for categories configured for the country', () => {
+            mockCustomPreference.employeeBenifitsConfigs = { 1774: { US: 1000 }, OUTLET: { DE: 250 } };
+
+            assert.deepEqual(Object.keys(createWith()), ['1774']);
+        });
+
+        it('should parse an allowance configured as a string', () => {
+            mockCustomPreference.employeeBenifitsConfigs = { 1774: { US: '750.5' } };
+
+            assert.equal(createWith()[1774].annualDiscountAllowance, 750.5);
+        });
+
+        it('should skip invalid allowances in the configuration', () => {
+            mockCustomPreference.employeeBenifitsConfigs = {
+                categoryTest1: { US: 'abc' },
+                categoryTest2: { US: -5 },
+                categoryTest3: { US: null },
+                categoryTest4: {},
+                categoryTest5: null,
+                1774: { US: 1000 }
+            };
+
+            assert.deepEqual(Object.keys(createWith()), ['1774']);
+        });
+
+        it('should give an unlimited-discount employee the category benefit as well', () => {
+            const result = EmployeeMgr.createEmployee({ ...baseParams, unlimitedDiscount: true });
+            const benefits = result.apiEmployee.custom.companyBenifits;
+
+            assert.isTrue(benefits.discountDetails.unlimitedDiscount);
+            assert.equal(benefits.benifitDetailsByCategory[1774].annualDiscountAllowance, 1000);
+        });
+
+        it('should not leak benefits between created employees', () => {
+            const first = createWith();
+            const second = createWith({ ID: 'TEST456' });
+
+            first[1774].discountUsage = 999;
+
+            assert.equal(second[1774].discountUsage, 0);
         });
     });
 

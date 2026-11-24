@@ -36,13 +36,37 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                 zipCode: '12345',
                 countryCode: 'US',
                 companyID: 'BIRK',
-                discountGroup: 'EMPLOYEE',
-                customAnnualDiscountAllowance: 1000,
-                annualDiscountUsage: 250,
-                unlimitedDiscount: false,
-                active: true
+                companyBenifits: {
+                    discountDetails: {
+                      discountGroup: "EMPLOYEE",
+                      customAnnualDiscountAllowance: 1000,
+                      annualDiscountUsage: 250,
+                      unlimitedDiscount: false,
+                      lastAllowanceReset: "2026-01-01T00:00:00.000Z",
+                    },
+                    benifitDetailsByCategory: {
+                        1774 : {
+                            isActive: true,
+                            annualDiscountAllowance: 1000,
+                            discountUsage: 0
+                        } 
+                    },
+                }
             }
         };
+
+        const companyBenifits = defaultEmployee.custom.companyBenifits;
+
+        Object.keys(companyBenifits.discountDetails).forEach((attributes)=>{
+            if( overrides.custom && Object.keys(overrides.custom).includes(attributes) ){
+                companyBenifits.discountDetails[attributes] = overrides.custom[attributes];
+                delete overrides.custom[attributes];
+            }
+        })
+
+       if(overrides.custom){
+        overrides.custom.companyBenifits = companyBenifits;
+       }
 
         const mergedCustom = overrides.custom
             ? { ...defaultEmployee.custom, ...overrides.custom }
@@ -56,6 +80,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             custom: mergedCustom
         };
     };
+
 
     beforeEach(() => {
         const mockCustomer = createMockCustomer();
@@ -179,6 +204,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
         });
     });
 
+
     describe('Property Setters', () => {
         it('should throw error when setting a read-only attribute', () => {
             const mockApiEmployee = createMockApiEmployee();
@@ -195,7 +221,25 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
 
             employee.discountGroup = 'PREMIUM';
 
-            assert.equal(mockApiEmployee.custom.discountGroup, 'PREMIUM');
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.discountGroup, 'PREMIUM');
+        });
+
+        // Beacuse I changed the Custom Object Structure I've added few more test cases 
+        it('should update unlimitedDiscount attribute', () => {
+            const mockApiEmployee = createMockApiEmployee();
+            const employee = new Employee(mockApiEmployee);
+
+            employee.unlimitedDiscount = false;
+
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.unlimitedDiscount, false);
+        });
+
+        it('should not update annualDiscountUsage[readOnly] attribute', () => {
+            const mockApiEmployee = createMockApiEmployee();
+            const employee = new Employee(mockApiEmployee);
+            assert.throws(() => {
+                employee.annualDiscountUsage = 500;
+            }, 'Cannot set read-only property annualDiscountUsage on Employee instance')
         });
     });
 
@@ -204,7 +248,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const mockApiEmployee = createMockApiEmployee({
                 custom: {
                     customerNumber: 'CUST123',
-                    annualDiscountUsage: 250,
+                    annualDiscountUsage: 250, 
                     customAnnualDiscountAllowance: 1000
                 }
             });
@@ -230,7 +274,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             const employee = new Employee(mockApiEmployee);
 
             assert.doesNotThrow(() => {
-                employee.increaseAnnualDiscountUsage(100);
+                employee.increaseAnnualDiscountUsage(100); 
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
@@ -271,13 +315,11 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             mockCustomerMgr.getCustomerByCustomerNumber.returns(mockCustomer);
 
             const employee = new Employee(mockApiEmployee);
-
             assert.doesNotThrow(() => {
                 employee.increaseAnnualDiscountUsage(100);
             });
-
             assert.equal(employee.annualDiscountUsage, 350);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 350);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 350);
         });
     });
 
@@ -325,9 +367,11 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
                     customAnnualDiscountAllowance: 1000
                 }
             });
+            
             const employee = new Employee(mockApiEmployee);
 
-            assert.throws(() => {
+
+            assert.throws(() => { 
                 employee.decreaseAnnualDiscountUsage(300);
             }, 'Cannot decrease annual discount usage: allowance below zero');
         });
@@ -357,7 +401,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountUsage, 150);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 150);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 150);
         });
     });
 
@@ -382,15 +426,18 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
 
             employee.customer = mockCustomer;
 
-            assert.isUndefined(employee.lastAllowanceReset);
+            const previousReset = employee.lastAllowanceReset;
+
+            assert.isDefined(previousReset);
 
             assert.doesNotThrow(() => {
                 employee.resetAnnualDiscountUsage();
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 0);
-            assert.isDefined(employee.lastAllowanceReset);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 0);
+            assert.notEqual(employee.lastAllowanceReset, previousReset);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.lastAllowanceReset, employee.lastAllowanceReset);
         });
         it('should decrease annual discount usage by defined current usage', () => {
             const mockApiEmployee = createMockApiEmployee({
@@ -412,15 +459,325 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
 
             employee.customer = mockCustomer;
 
-            assert.isUndefined(employee.lastAllowanceReset);
+            const previousReset = employee.lastAllowanceReset;
+
+            assert.isDefined(previousReset);
 
             assert.doesNotThrow(() => {
                 employee.resetAnnualDiscountUsage();
             });
 
             assert.equal(employee.annualDiscountUsage, 0);
-            assert.equal(mockApiEmployee.custom.annualDiscountUsage, 0);
-            assert.isDefined(employee.lastAllowanceReset);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.annualDiscountUsage, 0);
+            assert.notEqual(employee.lastAllowanceReset, previousReset);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.lastAllowanceReset, employee.lastAllowanceReset);
+        }); 
+    });
+
+    describe('companyBenifits structure', () => {
+        it('should expose lastAllowanceReset from discountDetails', () => {
+            const employee = new Employee(createMockApiEmployee());
+
+            assert.equal(employee.lastAllowanceReset, '2026-01-01T00:00:00.000Z');
+        });
+
+        it('should throw error when setting read-only lastAllowanceReset', () => {
+            const employee = new Employee(createMockApiEmployee());
+
+            assert.throws(() => {
+                employee.lastAllowanceReset = new Date().toISOString();
+            }, 'Cannot set read-only property lastAllowanceReset on Employee instance.');
+        });
+
+        it('should create companyBenifits.discountDetails on write when the custom object has none', () => {
+            const mockApiEmployee = { type: 'Employee', custom: { ID: 'EMP001' } };
+            const employee = new Employee(mockApiEmployee);
+
+            employee.discountGroup = 'PREMIUM';
+
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.discountGroup, 'PREMIUM');
+        });
+
+        it('should keep existing benefit data when creating a missing discountDetails', () => {
+            const byCategory = { 1774: { isActive: true, annualDiscountAllowance: 1000, discountUsage: 10 } };
+            const mockApiEmployee = { type: 'Employee', custom: { ID: 'EMP001', companyBenifits: { benifitDetailsByCategory: byCategory } } };
+            const employee = new Employee(mockApiEmployee);
+
+            employee.unlimitedDiscount = true;
+
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.unlimitedDiscount, true);
+            assert.equal(mockApiEmployee.custom.companyBenifits.benifitDetailsByCategory, byCategory);
+        });
+    });
+
+    describe('category benefits (e.g. 1774)', () => {
+        const CAP_EXCEEDED = 'Cannot increase category allowance usage: allowance exceeded';
+        const INVALID_INCREASE = 'Cannot increase annual allowance usage: amount must be a non-negative number';
+        const INVALID_DECREASE = 'Cannot decrease annual allowance usage: amount must be a non-negative number';
+
+        const createEmployeeWith1774 = ({ entry = {}, details } = {}) => {
+            const mockApiEmployee = createMockApiEmployee(details ? { custom: details } : {});
+            const benefit = mockApiEmployee.custom.companyBenifits.benifitDetailsByCategory['1774'];
+
+            Object.assign(benefit, entry);
+
+            return {
+                mockApiEmployee: mockApiEmployee,
+                benefit: benefit,
+                details: mockApiEmployee.custom.companyBenifits.discountDetails,
+                employee: new Employee(mockApiEmployee)
+            };
+        };
+
+        describe('.increaseAnnualDiscountUsage(amount, category)', () => {
+            it('should increase only the category usage and leave the regular usage untouched', () => {
+                const { employee, benefit, details } = createEmployeeWith1774();
+
+                employee.increaseAnnualDiscountUsage(300, '1774');
+
+                assert.equal(benefit.discountUsage, 300);
+                assert.equal(details.annualDiscountUsage, 250);
+            });
+
+            it('should accumulate usage up to exactly the category allowance', () => {
+                const { employee, benefit } = createEmployeeWith1774();
+
+                employee.increaseAnnualDiscountUsage(600, '1774');
+
+                assert.doesNotThrow(() => {
+                    employee.increaseAnnualDiscountUsage(400, '1774');
+                });
+                assert.equal(benefit.discountUsage, 1000);
+            });
+
+            it('should throw when a single purchase exceeds the remaining category allowance', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 900 } });
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(101, '1774');
+                }, CAP_EXCEEDED);
+                assert.equal(benefit.discountUsage, 900);
+            });
+
+            it('should throw when the category allowance is already used up', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 1000 } });
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(0.01, '1774');
+                }, CAP_EXCEEDED);
+                assert.equal(benefit.discountUsage, 1000);
+            });
+
+            it('should use the allowance stored on the category benefit, not the regular allowance', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { annualDiscountAllowance: 500 } });
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(501, '1774');
+                }, CAP_EXCEEDED);
+                assert.equal(benefit.discountUsage, 0);
+            });
+
+            it('should treat a numeric and a string category identically', () => {
+                const { employee, benefit } = createEmployeeWith1774();
+
+                employee.increaseAnnualDiscountUsage(100, 1774);
+                employee.increaseAnnualDiscountUsage(100, '1774');
+
+                assert.equal(benefit.discountUsage, 200);
+            });
+
+            it('should treat a missing discountUsage as zero', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: undefined } });
+
+                employee.increaseAnnualDiscountUsage(50, '1774');
+
+                assert.equal(benefit.discountUsage, 50);
+            });
+
+            it('should accept an amount of zero without changing the usage', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 40 } });
+
+                assert.doesNotThrow(() => {
+                    employee.increaseAnnualDiscountUsage(0, '1774');
+                });
+                assert.equal(benefit.discountUsage, 40);
+            });
+
+            it('should throw when the employee has no benefit for the category', () => {
+                const { employee } = createEmployeeWith1774();
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(100, 'OUTLET');
+                }, 'Category benefit "OUTLET" is inactive or missing');
+            });
+
+            it('should throw when the employee has no companyBenifits at all', () => {
+                const employee = new Employee({ type: 'Employee', custom: { ID: 'EMP001' } });
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(100, '1774');
+                }, 'Category benefit "1774" is inactive or missing');
+            });
+
+            it('should throw when the category benefit is inactive', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { isActive: false } });
+
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(100, '1774');
+                }, 'Category benefit "1774" is inactive or missing');
+                assert.equal(benefit.discountUsage, 0);
+            });
+
+            it('should NOT be exempted by unlimitedDiscount', () => {
+                const { employee, benefit } = createEmployeeWith1774({ details: { unlimitedDiscount: true } });
+
+                employee.increaseAnnualDiscountUsage(400, '1774');
+
+                assert.equal(benefit.discountUsage, 400);
+                assert.throws(() => {
+                    employee.increaseAnnualDiscountUsage(601, '1774');
+                }, CAP_EXCEEDED);
+            });
+
+            it('should still exempt the regular allowance when unlimitedDiscount is set', () => {
+                const { employee, details } = createEmployeeWith1774({ details: { unlimitedDiscount: true } });
+
+                assert.doesNotThrow(() => {
+                    employee.increaseAnnualDiscountUsage(5000);
+                });
+                assert.equal(details.annualDiscountUsage, 250);
+            });
+
+            it('should throw for an invalid amount', () => {
+                const { employee } = createEmployeeWith1774();
+
+                [-1, NaN, '100', null, undefined].forEach((amount) => {
+                    assert.throws(() => {
+                        employee.increaseAnnualDiscountUsage(amount, '1774');
+                    }, INVALID_INCREASE);
+                });
+            });
+        });
+
+        describe('.decreaseAnnualDiscountUsage(amount, category)', () => {
+            it('should decrease only the category usage and leave the regular usage untouched', () => {
+                const { employee, benefit, details } = createEmployeeWith1774({ entry: { discountUsage: 400 } });
+
+                employee.decreaseAnnualDiscountUsage(150, '1774');
+
+                assert.equal(benefit.discountUsage, 250);
+                assert.equal(details.annualDiscountUsage, 250);
+            });
+
+            it('should allow decreasing down to exactly zero', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 400 } });
+
+                assert.doesNotThrow(() => {
+                    employee.decreaseAnnualDiscountUsage(400, '1774');
+                });
+                assert.equal(benefit.discountUsage, 0);
+            });
+
+            it('should throw when the usage would drop below zero', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 100 } });
+
+                assert.throws(() => {
+                    employee.decreaseAnnualDiscountUsage(101, '1774');
+                }, 'Cannot decrease category allowance usage: allowance below zero');
+                assert.equal(benefit.discountUsage, 100);
+            });
+
+            it('should treat a numeric and a string category identically', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 300 } });
+
+                employee.decreaseAnnualDiscountUsage(100, 1774);
+                employee.decreaseAnnualDiscountUsage(100, '1774');
+
+                assert.equal(benefit.discountUsage, 100);
+            });
+
+            it('should throw when the employee has no benefit for the category', () => {
+                const { employee } = createEmployeeWith1774();
+
+                assert.throws(() => {
+                    employee.decreaseAnnualDiscountUsage(100, 'OUTLET');
+                }, 'Category benefit "OUTLET" not found');
+            });
+
+            it('should still refund an inactive category benefit', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { isActive: false, discountUsage: 300 } });
+
+                assert.doesNotThrow(() => {
+                    employee.decreaseAnnualDiscountUsage(100, '1774');
+                });
+                assert.equal(benefit.discountUsage, 200);
+            });
+
+            it('should NOT be skipped by unlimitedDiscount', () => {
+                const { employee, benefit } = createEmployeeWith1774({
+                    entry: { discountUsage: 400 },
+                    details: { unlimitedDiscount: true }
+                });
+
+                employee.decreaseAnnualDiscountUsage(300, '1774');
+
+                assert.equal(benefit.discountUsage, 100);
+            });
+
+            it('should throw for an invalid amount', () => {
+                const { employee } = createEmployeeWith1774({ entry: { discountUsage: 400 } });
+
+                [-1, NaN, '100', null, undefined].forEach((amount) => {
+                    assert.throws(() => {
+                        employee.decreaseAnnualDiscountUsage(amount, '1774');
+                    }, INVALID_DECREASE);
+                });
+            });
+        });
+
+        describe('.resetAnnualDiscountUsage()', () => {
+            it('should reset the regular usage and the usage of every category benefit', () => {
+                const { employee, mockApiEmployee, benefit, details } = createEmployeeWith1774({ entry: { discountUsage: 700 } });
+                const outlet = { isActive: true, annualDiscountAllowance: 200, discountUsage: 50 };
+
+                mockApiEmployee.custom.companyBenifits.benifitDetailsByCategory.OUTLET = outlet;
+
+                employee.resetAnnualDiscountUsage();
+
+                assert.equal(details.annualDiscountUsage, 0);
+                assert.equal(benefit.discountUsage, 0);
+                assert.equal(outlet.discountUsage, 0);
+            });
+
+            it('should keep allowance and active flag of the category benefit', () => {
+                const { employee, benefit } = createEmployeeWith1774({ entry: { discountUsage: 700 } });
+
+                employee.resetAnnualDiscountUsage();
+
+                assert.equal(benefit.annualDiscountAllowance, 1000);
+                assert.isTrue(benefit.isActive);
+            });
+
+            it('should persist lastAllowanceReset in discountDetails as an ISO date', () => {
+                const { employee, details } = createEmployeeWith1774();
+
+                employee.resetAnnualDiscountUsage();
+
+                assert.notEqual(details.lastAllowanceReset, '2026-01-01T00:00:00.000Z');
+                assert.equal(new Date(details.lastAllowanceReset).toISOString(), details.lastAllowanceReset);
+            });
+
+            it('should not fail for an employee without any category benefit', () => {
+                const mockApiEmployee = createMockApiEmployee();
+
+                mockApiEmployee.custom.companyBenifits.benifitDetailsByCategory = {};
+
+                const employee = new Employee(mockApiEmployee);
+
+                assert.doesNotThrow(() => {
+                    employee.resetAnnualDiscountUsage();
+                });
+            });
         });
     });
 
@@ -469,7 +826,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountAllowance, 1500);
-            assert.equal(mockApiEmployee.custom.customAnnualDiscountAllowance, 1500);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.customAnnualDiscountAllowance, 1500);
         });
 
         it('should update annual discount allowance for unregistered employee', () => {
@@ -487,7 +844,7 @@ describe('app_custom_core/scripts/customObjects/employee/Employee', () => {
             });
 
             assert.equal(employee.annualDiscountAllowance, 2000);
-            assert.equal(mockApiEmployee.custom.customAnnualDiscountAllowance, 2000);
+            assert.equal(mockApiEmployee.custom.companyBenifits.discountDetails.customAnnualDiscountAllowance, 2000);
         });
     });
 

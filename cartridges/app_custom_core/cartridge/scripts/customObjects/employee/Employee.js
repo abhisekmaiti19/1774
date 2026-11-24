@@ -10,11 +10,12 @@
  * @property {string} custom.customerNumber - Customer number assigned when redeeming the employee benefits by registering a SFCC account
  * @property {string} custom.zipCode - Employee zip code
  * @property {string} custom.countryCode - Employee country code
- * @property {number} custom.customAnnualDiscountAllowance - Custom annual discount allowance
- * @property {number} custom.annualDiscountUsage - Used discount amount (optional) (0 if unlimited discount)
- * @property {boolean} custom.unlimitedDiscount - Whether discount is capped or not
  * @property {string} custom.companyID - Company ID
- * @property {string} custom.discountGroup - Discount group
+ * @property {object} custom.companyBenifits - Container for all benefit data of the employee
+ * @property {object} custom.companyBenifits.discountDetails - Existing employee discount:
+ *   { discountGroup, customAnnualDiscountAllowance, annualDiscountUsage, unlimitedDiscount, lastAllowanceReset }
+ * @property {object} custom.companyBenifits.benifitDetailsByCategory - Separate allowance per product category (e.g. 1774):
+ *   { "<category>": { isActive, annualDiscountAllowance, discountUsage } }
  */
 
 /**
@@ -75,11 +76,7 @@ const customObjectAttributes = [
     'zipCode',
     'countryCode',
     'companyID',
-    'discountGroup',
-    'customAnnualDiscountAllowance',
-    'unlimitedDiscount',
-    'annualDiscountUsage',
-    'lastAllowanceReset'
+    'companyBenifits'
 ];
 
 const readOnlyAttributes = [
@@ -90,6 +87,35 @@ const readOnlyAttributes = [
     'annualDiscountUsage',
     'lastAllowanceReset'
 ];
+const discountDetailAttributes = [
+    'discountGroup',
+    'customAnnualDiscountAllowance',
+    'annualDiscountUsage',
+    'unlimitedDiscount',
+    'lastAllowanceReset'
+];
+
+/**
+ * @description Get the standard discount details object from the employee's custom benefits,
+ * initializing missing benefit containers on the custom object so reads and writes share one reference.
+ *
+ * @param {Employee} employee - Employee instance whose discount details are accessed.
+ *
+ * @returns {object} Standard discount details object (`{ discountGroup, customAnnualDiscountAllowance, annualDiscountUsage, unlimitedDiscount, lastAllowanceReset }`).
+ */
+function getDiscountDetails(employee) {
+    const custom = employee.apiEmployee.custom;
+
+    if (!custom.companyBenifits) {
+        custom.companyBenifits = {};
+    }
+
+    if (!custom.companyBenifits.discountDetails) {
+        custom.companyBenifits.discountDetails = {};
+    }
+
+    return custom.companyBenifits.discountDetails;
+}
 
 /**
  * @description Define getters for EmployeeCustomObject's properties based on its custom attributes,
@@ -99,8 +125,9 @@ const readOnlyAttributes = [
  *
  * @throws {Error} if an attempt is made to set a read-only property.
  */
+const Transaction = require('dw/system/Transaction');
 
-customObjectAttributes.forEach(function(field) {
+customObjectAttributes.forEach(function (field) {
     Object.defineProperty(Employee.prototype, field, {
         get: function () {
             return this.apiEmployee.custom[field];
@@ -112,14 +139,32 @@ customObjectAttributes.forEach(function(field) {
                 throw new Error('Cannot set read-only property ' + field + ' on Employee instance.');
             }
 
-            const Transaction = require('dw/system/Transaction');
-
             Transaction.wrap(function () {
                 this.apiEmployee.custom[field] = value;
             }.bind(this));
         }
     });
 });
+
+discountDetailAttributes.forEach(function (field) {
+    Object.defineProperty(Employee.prototype, field, {
+        get: function () {
+            return getDiscountDetails(this)[field];
+        },
+        enumerable: true,
+        configurable: false,
+        set: function (value) {
+            if (readOnlyAttributes.includes(field)) {
+                throw new Error('Cannot set read-only property ' + field + ' on Employee instance.');
+            }
+            Transaction.wrap(function () {
+                getDiscountDetails(this)[field] = value;
+            }.bind(this));
+        }
+    });
+});
+
+
 
 /**
  * @description Get the employee's annual discount allowance: either from the custom attribute when a personal value is set,
@@ -138,57 +183,104 @@ Object.defineProperty(Employee.prototype, 'annualDiscountAllowance', {
     configurable: false
 });
 
+
+/**
+ * @description Retrieve the benefit configuration and usage entry for a specific product category.
+ *
+ * @param {Employee} employee - Employee instance to inspect.
+ * @param {string|number} category - Category identifier (e.g., `'1774'`).
+ *
+ * @returns {object|null} Category benefit entry (`{ isActive, annualDiscountAllowance, discountUsage }`) or `null` if not found.
+ */
+function getCategoryBenefit(employee, category) {
+    const benefits = employee.apiEmployee.custom.companyBenifits;
+    const byCategory = benefits && benefits.benifitDetailsByCategory;
+
+    return (byCategory && byCategory[category]) || null;
+}
+
+
+
 /**
  * @description Increase the annual discount usage by the specified amount.
+ * Without a category the existing employee allowance is used (exempt when unlimitedDiscount is set).
+ * With a category the separate allowance of that category is used; unlimitedDiscount never exempts it.
  * @param {number} amount - amount to increase the annual discount usage by.
+ * @param {string|number} [category] - category benefit to charge, e.g. '1774'.
  * @returns {void}
  * @throws {Error} if the amount is not a non-negative number
- * @throws {Error} if the amount would exceed the annual discount allowance.
-*/
-
-Employee.prototype.increaseAnnualDiscountUsage = function (amount) {
-    if (typeof amount !== 'number' || amount < 0) {
+ * @throws {Error} if the category benefit is missing or inactive
+ * @throws {Error} if the amount would exceed the annual discount allowance (or the category allowance).
+ */
+Employee.prototype.increaseAnnualDiscountUsage = function (amount, category) {
+    if (typeof amount !== 'number' || isNaN(amount) || amount < 0) {
         throw new Error('Cannot increase annual allowance usage: amount must be a non-negative number');
+    }
+
+    if (!empty(category)) {
+        const categoryBenefit = getCategoryBenefit(this, category);
+        if (!categoryBenefit || !categoryBenefit.isActive) {
+            throw new Error('Category benefit "' + category + '" is inactive or missing');
+        }
+        const currentUsage = categoryBenefit.discountUsage || 0;
+        if (currentUsage + amount > categoryBenefit.annualDiscountAllowance) {
+            throw new Error('Cannot increase category allowance usage: allowance exceeded');
+        }
+        categoryBenefit.discountUsage = currentUsage + amount;
+        return;
     }
 
     if (this.unlimitedDiscount) {
         return;
     }
 
-    const exceedsAllowance = this.annualDiscountUsage + amount > this.annualDiscountAllowance;
-
-    if (exceedsAllowance) {
+    const currentUsage = getDiscountDetails(this).annualDiscountUsage || 0;
+    if (currentUsage + amount > this.annualDiscountAllowance) {
         throw new Error('Cannot increase annual allowance usage: allowance exceeded');
     }
-
-    this.apiEmployee.custom.annualDiscountUsage += amount;
+    getDiscountDetails(this).annualDiscountUsage = currentUsage + amount;
 };
 
 /**
  * @description Decrease the annual discount usage by the specified amount.
+ * Works for inactive category benefits as well, so refunds are still possible after a benefit was deactivated.
  *
  * @param {number} amount - amount to decrease the annual discount usage by.
+ * @param {string|number} [category] - category benefit to refund, e.g. '1774'.
  *
  * @returns {void}
  *
  * @throws {Error} if the amount is not a non-negative number
+ * @throws {Error} if the category benefit does not exist
  * @throws {Error} if the amount would result in a negative annual discount usage.
  */
-
-Employee.prototype.decreaseAnnualDiscountUsage = function (amount) {
-    if (typeof amount !== 'number' || amount < 0) {
+Employee.prototype.decreaseAnnualDiscountUsage = function (amount, category) {
+    if (typeof amount !== 'number' || isNaN(amount) || amount < 0) {
         throw new Error('Cannot decrease annual allowance usage: amount must be a non-negative number');
+    }
+
+    if (!empty(category)) {
+        const categoryBenefit = getCategoryBenefit(this, category);
+        if (!categoryBenefit) {
+            throw new Error('Category benefit "' + category + '" not found');
+        }
+        const currentUsage = categoryBenefit.discountUsage || 0;
+        if (currentUsage - amount < 0) {
+            throw new Error('Cannot decrease category allowance usage: allowance below zero');
+        }
+        categoryBenefit.discountUsage = currentUsage - amount;
+        return;
     }
 
     if (this.unlimitedDiscount) {
         return;
     }
 
-    if (this.annualDiscountUsage - amount < 0) {
+    const currentUsage = getDiscountDetails(this).annualDiscountUsage || 0;
+    if (currentUsage - amount < 0) {
         throw new Error('Cannot decrease annual discount usage: allowance below zero');
     }
-
-    this.apiEmployee.custom.annualDiscountUsage -= amount;
+    getDiscountDetails(this).annualDiscountUsage = currentUsage - amount;
 };
 
 /**
@@ -199,8 +291,16 @@ Employee.prototype.decreaseAnnualDiscountUsage = function (amount) {
 
 Employee.prototype.resetAnnualDiscountUsage = function () {
     this.decreaseAnnualDiscountUsage(this.annualDiscountUsage || 0);
-    this.apiEmployee.custom.lastAllowanceReset = new Date();
-}
+    getDiscountDetails(this).lastAllowanceReset = new Date().toISOString();
+
+    // Assuming (the category allowance is an ANNUAL cap): the yearly reset also clears every category usage (e.g. 1774).
+    const benefits = this.apiEmployee.custom.companyBenifits;
+    const byCategory = (benefits && benefits.benifitDetailsByCategory) || {};
+
+    Object.keys(byCategory).forEach(function (category) {
+        byCategory[category].discountUsage = 0;
+    });
+};
 
 /**
  * @description Update the annual discount allowance.
@@ -217,7 +317,7 @@ Employee.prototype.updateCustomAnnualDiscountAllowance = function (newAllowance)
         throw new Error('New allowance must be a non-negative number');
     }
 
-    this.apiEmployee.custom.customAnnualDiscountAllowance = newAllowance;
+    this.customAnnualDiscountAllowance = newAllowance;
 };
 
 /**

@@ -4,6 +4,7 @@ const Employee = require('*/cartridge/scripts/customObjects/employee/Employee');
 const Logger = require('dw/system/Logger');
 const CustomObjectMgr = require('dw/object/CustomObjectMgr');
 const ES6Iterator = require('*/cartridge/scripts/customObjects/ES6Iterator');
+const CustomPreference = require('*/cartridge/scripts/helpers/customPreference');
 
 /**
  *  @module EmployeeMgr
@@ -79,8 +80,25 @@ const EmployeeMgr = (function () {
 
         let newCO;
 
-        const Transaction = require('dw/system/Transaction');
+        // we could use site specific site Custom prefernce value, but I write below logic considering current structure 
+        // e.g. { "1774": { "US": 1000 } }
+        const categoryConfig = CustomPreference.employeeBenifitsConfigs;
+        const benifitDetailsByCategory = {};
+        if (CustomPreference.isEmployeeBenifitsActive && categoryConfig) {
+            Object.keys(categoryConfig).forEach(function (category) {
+                const allowanceByCountry = categoryConfig[category] || {};
+                const allowance = parseFloat(allowanceByCountry[countryCode]);
+                if (!isNaN(allowance) && allowance >= 0) {
+                    benifitDetailsByCategory[category] = {
+                        isActive: true,
+                        annualDiscountAllowance: allowance,
+                        discountUsage: 0
+                    };
+                }
+            });
+        }
 
+        const Transaction = require('dw/system/Transaction');
         try {
             Transaction.wrap(function () {
                 newCO = CustomObjectMgr.createCustomObject('Employee', ID);
@@ -89,16 +107,16 @@ const EmployeeMgr = (function () {
                 newCO.custom.countryCode = countryCode;
                 newCO.custom.companyID = companyID || '';
                 newCO.custom.zipCode = zipCode;
-                newCO.custom.unlimitedDiscount = !!unlimitedDiscount;
-                newCO.custom.discountGroup = discountGroup;
-                newCO.custom.lastAllowanceReset = new Date();
-                newCO.custom.annualDiscountUsage = 0;
-
-                if (unlimitedDiscount) {
-                    return;
-                }
-
-                newCO.custom.customAnnualDiscountAllowance = customAnnualDiscountAllowance || 0;
+                newCO.custom.companyBenifits = {
+                    discountDetails: {
+                        discountGroup: discountGroup,
+                        customAnnualDiscountAllowance: unlimitedDiscount ? 0 : customAnnualDiscountAllowance || 0,
+                        annualDiscountUsage: 0,
+                        unlimitedDiscount: !!unlimitedDiscount,
+                        lastAllowanceReset: new Date().toISOString()
+                    },
+                    benifitDetailsByCategory: benifitDetailsByCategory
+                };
             });
 
             return new Employee(newCO);
